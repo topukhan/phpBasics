@@ -1,12 +1,23 @@
 <?php
 // db connection
 include('dbconfig.php');
-if (isset($_GET['search'])) {
+
+$sort_column = 'name';
+$sort_order = 'ASC';
+
+if (isset($_GET['sort'])) {
+    if ($_GET['sort'] === 'asc') {
+        $sort_order = 'ASC';
+    } elseif ($_GET['sort'] === 'desc') {
+        $sort_order = 'DESC';
+    }
+}
+if (isset($_GET['search']) && !empty($_GET['search'])) {
     $search = $_GET['search'];
     $stmt = $connection->prepare("SELECT * FROM playerinfo WHERE name LIKE :search");
     $stmt->bindValue(':search', '%' . $search . '%');
 } else {
-    $stmt = $connection->prepare("SELECT * FROM playerinfo");
+    $stmt = $connection->prepare("SELECT * FROM playerinfo ORDER BY $sort_column $sort_order");
 }
 $stmt->execute();
 $output = $stmt->fetchAll(PDO::FETCH_OBJ);
@@ -96,27 +107,23 @@ $output = $stmt->fetchAll(PDO::FETCH_OBJ);
                                 </td>
 
                                 <td>
-                                    <form method="GET" action="index.php">
+                                    <form method="GET" action="#" style="display: inline;">
                                         <div style="display: flex;">
 
                                             <input class="form-control " type="search" placeholder="Search" name="search" aria-label="Search">
                                             <div class="btn-group ml-4">
                                                 <button class="btn btn-dark mx-1" type="submit">Search</button>
-                                                <button class="btn btn-primary mx-2 text-white"><a href="./index.php">Reset</a></button>
+                                                <button class="btn btn-primary text-white"><a href="./index.php">Reset</a></button>
                                             </div>
-                                            <div class="btn-group">
-                                                <button type="button" class="btn btn-success btn-outline-light"><i class="fa-solid fa-arrow-down-a-z"></i></button>
-                                                <button type="button" class="btn btn-success btn-outline-light"><i class="fa-solid fa-arrow-down-z-a"></i></button>
+                                            <div class="btn-group ms-1">
+                                                <button type="submit" name="sort" value="asc" class="btn btn-success btn-outline-light"><i class="fa-solid fa-arrow-down-a-z"></i></button>
+                                                <button type="submit" name="sort" value="desc" class="btn btn-success btn-outline-light"><i class="fa-solid fa-arrow-down-z-a"></i></button>
                                             </div>
                                         </div>
                                     </form>
-
-
-
-
-
                                 </td>
                                 <td></td>
+
                             </tr>
                             <tr>
                                 <th style="width: 0%;"><input type="checkbox"></th>
