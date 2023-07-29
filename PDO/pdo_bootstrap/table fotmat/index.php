@@ -1,10 +1,17 @@
 <?php
+session_start();
 // db connection
 include('dbconfig.php');
 
 $sort_column = 'name';
 $sort_order = 'ASC';
 
+// Pagination settings
+$records_per_page = 4;
+$current_page = isset($_GET['page']) ? intval($_GET['page']) : 1;
+$start_from = ($current_page - 1) * $records_per_page;
+
+// Filter/ sort 
 if (isset($_GET['sort'])) {
     if ($_GET['sort'] === 'asc') {
         $sort_order = 'ASC';
@@ -12,17 +19,73 @@ if (isset($_GET['sort'])) {
         $sort_order = 'DESC';
     }
 }
+
+// SQL query without LIMIT clause to get the total number of records
+$total_records_query = isset($_GET['search']) && !empty($_GET['search'])
+    ? "SELECT COUNT(*) AS total FROM players WHERE name LIKE :search"
+    : "SELECT COUNT(*) AS total FROM players";
+
+$stmt_total = $connection->prepare($total_records_query);
+
 if (isset($_GET['search']) && !empty($_GET['search'])) {
     $search = $_GET['search'];
-    $stmt = $connection->prepare("SELECT * FROM playerinfo WHERE name LIKE :search");
-    $stmt->bindValue(':search', '%' . $search . '%');
-} else {
-    $stmt = $connection->prepare("SELECT * FROM playerinfo ORDER BY $sort_column $sort_order");
+    $stmt_total->bindValue(':search', '%' . $search . '%');
 }
+
+$stmt_total->execute();
+$total_result = $stmt_total->fetch(PDO::FETCH_ASSOC);
+$total_records = $total_result['total'];
+
+// SQL query with LIMIT clause for pagination
+if (isset($_GET['search']) && !empty($_GET['search'])) {
+    $query = "SELECT * FROM players WHERE name LIKE :search ORDER BY $sort_column $sort_order LIMIT :start_from, :records_per_page";
+    $stmt = $connection->prepare($query);
+    $stmt->bindValue(':search', '%' . $search . '%');
+    $stmt->bindValue(':start_from', $start_from, PDO::PARAM_INT);
+    $stmt->bindValue(':records_per_page', $records_per_page, PDO::PARAM_INT);
+} else {
+    $query = "SELECT * FROM players ORDER BY $sort_column $sort_order LIMIT :start_from, :records_per_page";
+    $stmt = $connection->prepare($query);
+    $stmt->bindValue(':start_from', $start_from, PDO::PARAM_INT);
+    $stmt->bindValue(':records_per_page', $records_per_page, PDO::PARAM_INT);
+}
+
 $stmt->execute();
 $output = $stmt->fetchAll(PDO::FETCH_OBJ);
 
+// pages need to show all record
+$total_pages = ceil($total_records / $records_per_page);
+// Serial number (Sl No) calculation
+$serial_number = ($current_page - 1) * $records_per_page + 1;
+
+// Multi Delete functionality 
+if (isset($_POST['delete'])) {
+    if (!empty($_POST['checkedIds'])) {
+        // Get the checked ids
+        $checkedIds = $_POST['checkedIds'];
+
+        // Prepare the DELETE statement
+        $sql = 'DELETE FROM players WHERE id IN (' . implode(',', $checkedIds) . ')';
+
+        // Execute the DELETE statement
+        $stmt = $connection->prepare($sql);
+        $stmt->execute();
+
+        // If the DELETE statement was successful, redirect to the list of users
+        if ($stmt->rowCount() > 0) {
+            $_SESSION['message'] = 'Selected records deleted successfully.';
+            header('Location: ' . $_SERVER['PHP_SELF']);
+            exit;
+        } else {
+            $_SESSION['message'] = 'No records were deleted.';
+        }
+    } else {
+        // Show an alert if no checkboxes are selected
+        $_SESSION['message'] = 'Please select at least one record to delete.';
+    }
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -34,190 +97,179 @@ $output = $stmt->fetchAll(PDO::FETCH_OBJ);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 </head>
-<style>
-    nav {
-        margin-top: 20px;
-        display: flex;
-    }
-
-    .main-div {
-        padding: 30px;
-    }
-
-    .search {
-        display: flex;
-    }
-
-    .search input {
-        margin-right: 3px;
-    }
-
-    nav:nth-child(1) button {
-        margin-left: 3px;
-
-    }
-
-    th {
-        color: white;
-    }
-
-    a {
-        color: white;
-        text-decoration: none;
-    }
-
-    .create {
-        height: 40px;
-        width: 40px;
-        background-color: black;
-        margin-left: auto;
-        margin-right: auto;
-        border-radius: 100%;
-        color: white;
-        font-size: 20px;
-        margin-top: 40px;
-    }
-</style>
 
 <body>
     <div>
         <h1 class="text-center bg-success text-white p-2">Player List</h1>
     </div>
-
-    <div class="main-div">
-        <!-- <header>
-            <nav>
-                <div class="search">
-                    <input class="form-control " type="search" placeholder="Search" aria-label="Search">
-                    <button class="btn btn-outline-success" type="submit">Search</button>
-                </div>
-                <div>
-                    <button class="btn btn-success">Filter</button>
-                </div>
-            </nav>
-        </header> -->
-        <div class="card mt-4">
+    <!-- Message Alert -->
+    <?php
+    if (isset($_SESSION['message'])) {
+        echo '<div class="alert alert-success alert-dismissible fade show mt-3" role="alert">';
+        echo $_SESSION['message'];
+        echo '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+        echo '</div>';
+        unset($_SESSION['message']);
+    }
+    ?>
+    <div class="main-div container">
+        <div class="card my-3">
             <div class="card-body">
-                <div class="table-responsive ">
-                    <table class="table table-bordered">
-                        <thead style="background-color: #198754;">
+                <div class="table-responsive">
+                    <table class="table table-bordered text-center">
+                        <thead class="table-success">
                             <tr>
-                                <td>
-
-                                </td>
-
-                                <td>
-                                    <form method="GET" action="#" style="display: inline;">
-                                        <div style="display: flex;">
-
-                                            <input class="form-control " type="search" placeholder="Search" name="search" aria-label="Search">
-                                            <div class="btn-group ml-4">
-                                                <button class="btn btn-dark mx-1" type="submit">Search</button>
-                                                <button class="btn btn-primary text-white"><a href="./index.php">Reset</a></button>
-                                            </div>
-                                            <div class="btn-group ms-1">
-                                                <button type="submit" name="sort" value="asc" class="btn btn-success btn-outline-light"><i class="fa-solid fa-arrow-down-a-z"></i></button>
-                                                <button type="submit" name="sort" value="desc" class="btn btn-success btn-outline-light"><i class="fa-solid fa-arrow-down-z-a"></i></button>
+                                <th style="width: 0%;"></th>
+                                <th></th>
+                                <th>
+                                    <!-- search/filter form  -->
+                                    <form method="GET" action="" style="display: inline;">
+                                        <div class="input-group">
+                                            <input class="form-control" type="search" placeholder="Search" name="search" aria-label="Search">
+                                            <div class="input-group-append">
+                                                <button class="btn btn-success" type="submit">Search</button>
+                                                <a href="./index.php" class="btn btn-primary text-white ms-1">Reset</a>
                                             </div>
                                         </div>
+                                        <!-- Ascending and Descending buttons -->
+                                        <div class="btn-group mt-2">
+                                            <a href="?sort=asc" class="btn btn-success <?= ($sort_order === 'ASC') ? 'active' : ''; ?>">
+                                                <i class="fa-solid fa-arrow-down-a-z"></i> Asc
+                                            </a>
+                                            <a href="?sort=desc" class="btn btn-success <?= ($sort_order === 'DESC') ? 'active' : ''; ?>">
+                                                <i class="fa-solid fa-arrow-down-z-a"></i> Desc
+                                            </a>
+                                        </div>
                                     </form>
-                                </td>
-                                <td></td>
 
+                                </th>
+                                <th></th>
                             </tr>
                             <tr>
-                                <th style="width: 0%;"><input type="checkbox"></th>
+                                <th style="width: 0%;"></th>
+                                <th>sl.</th>
                                 <th>Name</th>
                                 <th>Action</th>
-
                             </tr>
                         </thead>
-                        <tbody>
-                            <?php
-                            // $stmt = $connection->prepare("SELECT * FROM playerinfo");
-                            // $stmt->execute();
-                            // $output = $stmt->fetchAll(PDO::FETCH_OBJ);
-
-                            if ($output) {
-                                foreach ($output as $row) {
-                            ?>
+                        <form action="#" method="post">
+                            <tbody>
+                                <!-- data table  -->
+                                <?php
+                                $sl = 1;
+                                if ($output) {
+                                    foreach ($output as $row) {
+                                ?>
+                                        <tr>
+                                            <td class="p-3 ">
+                                                <label for="checkbox_<?php echo $row->id; ?>">
+                                                    <input type='checkbox' name="checkedIds[]" value="<?php echo $row->id; ?>" id="checkbox_<?php echo $row->id; ?>">
+                                                </label>
+                                            </td>
+                                            <td><?= $serial_number++; ?></td>
+                                            <td><?= $row->name; ?></td>
+                                            <td>
+                                                <a href="show.php?id=<?= $row->id ?>" class='btn btn-success rounded-circle'>
+                                                    <i class='fa-solid fa-eye'></i>
+                                                </a>
+                                                <a href="edit.php?id=<?= $row->id ?>" class='btn btn-warning rounded-circle'>
+                                                    <i class='fa-solid fa-pen-to-square'></i>
+                                                </a>
+                                                <a href="delete.php?id=<?= $row->id ?>" onclick="return confirm('Are you sure you want to delete this player?')" class='btn btn-danger rounded-circle'>
+                                                    <i class='fa-solid fa-trash'></i>
+                                                </a>
+                                                <a href="#" class='btn btn-primary rounded-circle'>
+                                                    <i class='fa-solid fa-share'></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    <?php
+                                    }
+                                } else {
+                                    ?>
                                     <tr>
-                                        <td><input type='checkbox'></td>
-                                        <td><?= $row->name; ?></td>
-                                        <td>
-                                            <button style='color: #198754; background-color: #198754;' class='btn rounded-circle'><a href="show.php?id=<?= $row->id ?>" type='button'><i class='fa-solid fa-eye'></i></a></button>
-                                            <button class='btn btn rounded-circle' style='background-color: orange;'><a href="edit.php?id=<?= $row->id ?>"><i class='fa-solid fa-pen-to-square'></i></a></button>
-                                            <button class='btn rounded-circle' style='background-color: red; color: white;'><a href="delete.php?id=<?= $row->id ?>"><i class='fa-solid fa-trash'></i></a></button>
-                                            <button class='btn rounded-circle' style='background-color: #86b7fe; color: white;'><i class='fa-solid fa-share'></i></button>
-                                        </td>
+                                        <td colspan="3">No Record Found</td>
                                     </tr>
                                 <?php
                                 }
-                            } else {
                                 ?>
-                                <tr>
-                                    <td colspan="3">No Record Found</td>
-                                </tr>
-                            <?php
-                            }
-                            ?>
 
-                        </tbody>
-
-
+                            </tbody>
                     </table>
+                    <button onclick="return confirm('Are you sure you want to delete this player?')" class='btn btn-danger' type="submit" name="delete">
+                        <i class='fa-solid fa-trash'></i>
+                        <span>Multiple Delete</span>
+                    </button>
+                    <label class="btn btn-light" for="checkAll">
+                        <input type="checkbox" id="checkAll" class="me-2">Check all </label>
+                    </form>
+
                 </div>
-                <div style="display: flex; justify-content: center;">
-                    <a href="create.php"><button class="create" style="background-color: black ; color: white;"><i class="fa-solid fa-plus"></i></button></a>
+                <div class="text-center mt-3">
+                    <a href="create.php" class="btn btn-success btn-lg"><i class="fa-solid fa-plus"></i></a>
                 </div>
 
+                <div class="container">
+                    <div class="row">
+                        <div class="col-12">
+                            <!-- Pagination -->
+                            <div class="float-start">
+                                <!-- Pagination links -->
+                                <ul class="pagination justify-content-start">
+                                    <?php
+                                    if ($current_page > 1) {
+                                        echo '<li class="page-item"><a class="page-link" href="?page=' . ($current_page - 1) . '">&laquo;</a></li>';
+                                    } else {
+                                        echo '<li class="page-item disabled"><a class="page-link" href="#">&laquo;</a></li>';
+                                    }
 
-                <div style="display: flex;">
-                    <div>
-                        <nav aria-label="Page navigation example">
-                            <ul class="pagination">
-                                <li class="page-item">
-                                    <a class="page-link" href="#" aria-label="Previous">
-                                        <span aria-hidden="true">«</span>
-                                    </a>
-                                </li>
-                                <li class="page-item"><a class="page-link" href="#">1</a></li>
-                                <li class="page-item"><a class="page-link" href="#">2</a></li>
-                                <li class="page-item"><a class="page-link" href="#">3</a></li>
-                                <li class="page-item">
-                                    <a class="page-link" href="#" aria-label="Next">
-                                        <span aria-hidden="true">»</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </nav>
+                                    for ($i = 1; $i <= $total_pages; $i++) {
+                                        if ($i == $current_page) {
+                                            echo '<li class="page-item active"><a class="page-link" href="#">' . $i . '</a></li>';
+                                        } else {
+                                            echo '<li class="page-item"><a class="page-link" href="?page=' . $i . '">' . $i . '</a></li>';
+                                        }
+                                    }
 
+                                    if ($current_page < $total_pages) {
+                                        echo '<li class="page-item"><a class="page-link" href="?page=' . ($current_page + 1) . '">&raquo;</a></li>';
+                                    } else {
+                                        echo '<li class="page-item disabled"><a class="page-link" href="#">&raquo;</a></li>';
+                                    }
+                                    ?>
+                                </ul>
+                            </div>
+                            <!-- Other buttons -->
+                            <div class="d-flex justify-content-end mt-3">
+                                <a href="?download_pdf" class="btn btn-success rounded-circle me-2"><i class="fa-solid fa-file-pdf"></i></a>
+                                <button class="btn btn-primary rounded-circle me-2"><i class="fa-solid fa-file-excel"></i></button>
+                                <button class="btn btn-info rounded-circle me-2"><i class="fa-solid fa-envelope"></i></button>
+                                <a href="create.html" class="btn btn-primary rounded-circle me-2"><i class="fa-solid fa-file-word"></i></a>
+                                <a href="create.html" class="btn btn-warning rounded-circle"><i class="fa-solid fa-clock-rotate-left"></i></a>
+                            </div>
+                        </div>
                     </div>
-
-                    <div style="margin-left: auto; margin-top: 20px;">
-                        <button style="color: #198754;
-                                    background-color: rgb(121, 35, 3);" class="btn rounded-circle"><a href="show.html" type="button"><i class="fa-solid fa-file-pdf"></i></a></button>
-                        <button class="btn  rounded-circle" style="background-color: rgb(0, 130, 39); color: white;"><i class="fa-solid fa-file-excel"></i></button>
-                        <button class="btn rounded-circle" style="background-color: #003af9; color: white;"><i class="fa-solid fa-envelope"></i></button>
-                        <button class="btn rounded-circle" style="background-color: rgb(0, 179, 255); color: white;"><a href="create.html"><i class="fa-solid fa-file-word"></i></a></button>
-                        <button class="btn rounded-circle" style="background-color: rgb(255, 98, 0); color: white;"><a href="create.html"><i class="fa-solid fa-clock-rotate-left"></i></a></button>
-
-
-                    </div>
-
-
                 </div>
-
-
             </div>
         </div>
 
-    </div>
+        <script>
+            // Function to handle the "Check All" functionality
+            function handleCheckAll() {
+                const checkAllCheckbox = document.getElementById('checkAll');
+                const checkboxes = document.querySelectorAll('input[name="checkedIds[]"]');
+                // Check or uncheck all checkboxes
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = checkAllCheckbox.checked;
+                });
+            }
+            // Event listener for the "Check All" checkbox
+            const checkAllCheckbox = document.getElementById('checkAll');
+            checkAllCheckbox.addEventListener('click', handleCheckAll);
+        </script>
 
-    </div>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
 
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
 </body>
 
 </html>
