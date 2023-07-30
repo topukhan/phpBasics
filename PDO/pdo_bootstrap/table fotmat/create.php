@@ -33,7 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <body>
     <div class="card">
-        <div class="card-header bg-success text-white">
+        <div class="card-
+         bg-success text-white">
             <h3>Player List Create</h3>
         </div>
         <?php

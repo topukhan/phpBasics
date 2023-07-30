@@ -22,8 +22,8 @@ if (isset($_GET['sort'])) {
 
 // SQL query without LIMIT clause to get the total number of records
 $total_records_query = isset($_GET['search']) && !empty($_GET['search'])
-    ? "SELECT COUNT(*) AS total FROM players WHERE is_deleted = FALSE AND name LIKE :search"
-    : "SELECT COUNT(*) AS total FROM players WHERE is_deleted = FALSE";
+    ? "SELECT COUNT(*) AS total FROM players WHERE is_deleted = TRUE AND name LIKE :search"
+    : "SELECT COUNT(*) AS total FROM players WHERE is_deleted = TRUE";
 $stmt_total = $connection->prepare($total_records_query);
 
 if (isset($_GET['search']) && !empty($_GET['search'])) {
@@ -38,13 +38,13 @@ echo "Total Records: " . $total_records;
 
 // SQL query with LIMIT clause for pagination
 if (isset($_GET['search']) && !empty($_GET['search'])) {
-    $query = "SELECT * FROM players WHERE is_deleted = FALSE AND name LIKE :search ORDER BY $sort_column $sort_order LIMIT :start_from, :records_per_page";
+    $query = "SELECT * FROM players WHERE is_deleted = TRUE AND name LIKE :search ORDER BY $sort_column $sort_order LIMIT :start_from, :records_per_page";
     $stmt = $connection->prepare($query);
     $stmt->bindValue(':search', '%' . $search . '%');
     $stmt->bindValue(':start_from', $start_from, PDO::PARAM_INT);
     $stmt->bindValue(':records_per_page', $records_per_page, PDO::PARAM_INT);
 } else {
-    $query = "SELECT * FROM players WHERE is_deleted = FALSE ORDER BY $sort_column $sort_order LIMIT :start_from, :records_per_page";
+    $query = "SELECT * FROM players WHERE is_deleted = TRUE ORDER BY $sort_column $sort_order LIMIT :start_from, :records_per_page";
     $stmt = $connection->prepare($query);
     $stmt->bindValue(':start_from', $start_from, PDO::PARAM_INT);
     $stmt->bindValue(':records_per_page', $records_per_page, PDO::PARAM_INT);
@@ -93,7 +93,7 @@ if (isset($_POST['delete'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Trash</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
@@ -101,7 +101,7 @@ if (isset($_POST['delete'])) {
 
 <body>
     <div>
-        <h1 class="text-center bg-success text-white p-2">Player List</h1>
+        <h1 class="text-center bg-dark text-white p-2">Player Trash List</h1>
     </div>
     <!-- Message Alert -->
     <?php
@@ -114,6 +114,9 @@ if (isset($_POST['delete'])) {
     }
     ?>
     <div class="main-div container">
+        
+            <a href="./index.php" class="btn btn-primary text-white">List </a>
+        
         <div class="card my-3">
             <div class="card-body">
                 <div class="table-responsive">
@@ -129,29 +132,19 @@ if (isset($_POST['delete'])) {
                                             <input class="form-control" type="search" placeholder="Search" name="search" aria-label="Search">
                                             <div class="input-group-append">
                                                 <button class="btn btn-success" type="submit">Search</button>
-                                                <a href="./index.php" class="btn btn-primary text-white ms-1">Reset</a>
+                                                <a href="./trashList.php" class="btn btn-primary text-white ms-1">Reset</a>
                                             </div>
                                         </div>
-                                        <!-- Ascending and Descending buttons -->
-                                        <div class="btn-group mt-2">
-                                            <a href="?sort=asc" class="btn btn-success <?= ($sort_order === 'ASC') ? 'active' : ''; ?>">
-                                                <i class="fa-solid fa-arrow-down-a-z"></i> Asc
-                                            </a>
-                                            <a href="?sort=desc" class="btn btn-success <?= ($sort_order === 'DESC') ? 'active' : ''; ?>">
-                                                <i class="fa-solid fa-arrow-down-z-a"></i> Desc
-                                            </a>
-                                        </div>
+
                                     </form>
 
                                 </th>
-                                <th></th>
                                 <th></th>
                             </tr>
                             <tr>
                                 <th style="width: 0%;"></th>
                                 <th>sl.</th>
                                 <th>Name</th>
-                                <th>Soft Delete</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -171,28 +164,19 @@ if (isset($_POST['delete'])) {
                                             </td>
                                             <td><?= $serial_number++; ?></td>
                                             <td><?= $row->name; ?></td>
-                                            <td>
-                                                <a href="softDelete.php?id=<?= $row->id ?>" class='btn btn-secondary '>
-                                                    <i class='fa-solid fa-trash'></i>
-                                                </a>
-                                            </td>
+
                                             <td>
 
-                                                <a title="Make duplicate" href="duplicate.php?id=<?= $row->id ?>" class='btn btn-info rounded-circle'>
-                                                    <i class='fa-solid fa-copy'></i>
+                                                <a title="Restore Player" href="restore.php?id=<?= $row->id ?>" class='text-white btn btn-secondary'>
+                                                    <i class='fa-solid fa-trash-restore-alt'></i>
+                                                    Restore
                                                 </a>
-                                                <a href="show.php?id=<?= $row->id ?>" class='btn btn-success rounded-circle'>
-                                                    <i class='fa-solid fa-eye'></i>
-                                                </a>
-                                                <a href="edit.php?id=<?= $row->id ?>" class='btn btn-warning rounded-circle'>
-                                                    <i class='fa-solid fa-pen-to-square'></i>
-                                                </a>
-                                                <a href="delete.php?id=<?= $row->id ?>" onclick="return confirm('Are you sure you want to delete this player?')" class='btn btn-danger rounded-circle'>
+
+                                                <a href="delete.php?id=<?= $row->id ?>" onclick="return confirm('Are you sure you want to permanently delete this player?')" class='btn btn-danger '>
                                                     <i class='fa-solid fa-trash'></i>
+                                                    Delete
                                                 </a>
-                                                <a href="#" data-bs-toggle="modal" data-bs-target="#shareModal" class='btn btn-primary rounded-circle'>
-                                                    <i class='fa-solid fa-share'></i>
-                                                </a>
+
                                             </td>
                                         </tr>
                                     <?php
@@ -215,54 +199,38 @@ if (isset($_POST['delete'])) {
                     <label class="btn btn-light" for="checkAll">
                         <input type="checkbox" id="checkAll" class="me-2">Check all </label>
                     </form>
-                    <a href="./trashList.php" class='btn btn-dark'>
-                        <i class='fa-solid fa-trash'></i>
-                        <span>Trash List</span>
-                    </a>
 
                 </div>
-                <div class="text-center mt-3">
-                    <a href="create.php" class="btn btn-success btn-lg"><i class="fa-solid fa-plus"></i></a>
-                </div>
 
-                <div class="container">
+
+                <div class="container my-3">
                     <div class="row">
                         <div class="col-12">
-                            <!-- Pagination -->
-                            <div class="float-start">
-                                <!-- Pagination links -->
-                                <ul class="pagination justify-content-start">
-                                    <?php
-                                    if ($current_page > 1) {
-                                        echo '<li class="page-item"><a class="page-link" href="?page=' . ($current_page - 1) . '">&laquo;</a></li>';
-                                    } else {
-                                        echo '<li class="page-item disabled"><a class="page-link" href="#">&laquo;</a></li>';
-                                    }
+                            <!-- Pagination links -->
+                            <ul class="pagination justify-content-center">
+                                <?php
+                                if ($current_page > 1) {
+                                    echo '<li class="page-item"><a class="page-link" href="?page=' . ($current_page - 1) . '">&laquo;</a></li>';
+                                } else {
+                                    echo '<li class="page-item disabled"><a class="page-link" href="#">&laquo;</a></li>';
+                                }
 
-                                    for ($i = 1; $i <= $total_pages; $i++) {
-                                        if ($i == $current_page) {
-                                            echo '<li class="page-item active"><a class="page-link" href="#">' . $i . '</a></li>';
-                                        } else {
-                                            echo '<li class="page-item"><a class="page-link" href="?page=' . $i . '">' . $i . '</a></li>';
-                                        }
-                                    }
-
-                                    if ($current_page < $total_pages) {
-                                        echo '<li class="page-item"><a class="page-link" href="?page=' . ($current_page + 1) . '">&raquo;</a></li>';
+                                for ($i = 1; $i <= $total_pages; $i++) {
+                                    if ($i == $current_page) {
+                                        echo '<li class="page-item active"><a class="page-link" href="#">' . $i . '</a></li>';
                                     } else {
-                                        echo '<li class="page-item disabled"><a class="page-link" href="#">&raquo;</a></li>';
+                                        echo '<li class="page-item"><a class="page-link" href="?page=' . $i . '">' . $i . '</a></li>';
                                     }
-                                    ?>
-                                </ul>
-                            </div>
-                            <!-- Other buttons -->
-                            <div class="d-flex justify-content-end mt-3">
-                                <a href="?download_pdf" class="btn btn-success rounded-circle me-2"><i class="fa-solid fa-file-pdf"></i></a>
-                                <button class="btn btn-primary rounded-circle me-2"><i class="fa-solid fa-file-excel"></i></button>
-                                <button class="btn btn-info rounded-circle me-2"><i class="fa-solid fa-envelope"></i></button>
-                                <a href="create.html" class="btn btn-primary rounded-circle me-2"><i class="fa-solid fa-file-word"></i></a>
-                                <a href="create.html" class="btn btn-warning rounded-circle"><i class="fa-solid fa-clock-rotate-left"></i></a>
-                            </div>
+                                }
+
+                                if ($current_page < $total_pages) {
+                                    echo '<li class="page-item"><a class="page-link" href="?page=' . ($current_page + 1) . '">&raquo;</a></li>';
+                                } else {
+                                    echo '<li class="page-item disabled"><a class="page-link" href="#">&raquo;</a></li>';
+                                }
+                                ?>
+                            </ul>
+
                         </div>
                     </div>
                 </div>
